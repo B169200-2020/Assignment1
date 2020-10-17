@@ -1,0 +1,34 @@
+#!/bin/bash
+
+##### First step is to create a directory for the output file.
+##### User is asked to input the path, this will be used to create a subdirectory for all subsequent output files.
+##### The Subdirectory is stored as a variable.
+
+inputpath () {
+echo -e "Input the path of an already existing directory, followed by the name you would like to give your (output) subdirectory (don't include the / at the end of the path). This subdirectory will be the home of all of your subsequent output data."
+
+##### This will read the path inputted by the user and save it as a variable called outputsubdirectory
+
+read outputsubdirectory
+echo -e "\n"
+read -p "Please confirm that "$outputsubdirectory" is the subdirectory that you wish to create (y/n)" choice
+if [ "$choice" = "y" ] ;
+then 
+
+##### This will create the subdirectory which will be where all the subsequent output files will be saved.
+
+mkdir "${outputsubdirectory}"
+echo -e "\nYour output subdirectory has been created, its path has been provided below."
+echo -e "${outputsubdirectory}"
+
+else 
+##### This will return the user to the start if he/she enters the wrong path.
+inputpath;
+fi
+}
+
+
+
+inputpath
+
+
