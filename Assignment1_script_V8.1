@@ -1,0 +1,302 @@
+#!/bin/bash
+
+##### First step is to create a directory for the output file.
+##### User is asked to input the path, this will be used to create a subdirectory for all subsequent output files.
+##### The Subdirectory is stored as a variable.
+
+inputpath () {
+echo -e "Input the path of an already existing directory, followed by the name you would like to give your (output) subdirectory (don't include the / at the end of the path). This subdirectory will be the home of all of your subsequent output data."
+
+##### This will read the path inputted by the user and save it as a variable called outputsubdirectory
+
+read outputsubdirectory
+echo -e "\n"
+read -p "Please confirm that "$outputsubdirectory" is the subdirectory that you wish to create (y/n)" choice
+if [ "$choice" = "y" ];
+then 
+
+##### This will create the subdirectory which will be where all the subsequent output files will be saved.
+
+mkdir "${outputsubdirectory}"
+echo -e "\nYour output subdirectory has been created, its path has been provided below."
+echo -e "${outputsubdirectory}"
+
+else 
+##### This will return the user to the start if he/she enters the wrong path.
+inputpath;
+fi
+}
+
+
+
+inputpath
+
+
+
+##### Next is obtain all of the raw data from the directory in which it is stored!!
+##### The user will be asked for the path to the directory containing all of the raw data, this will be saved as a variable
+##### All the files ending with fq.gz will then be copied into a subdirectory: outputsubdirectory/RAWDATA.
+
+Obtainingrawdata () {
+echo -e "\n Input the path of the directory containing all of the raw data (do not include / at the end of the path)"
+
+
+##### The raw data path supplied by the user is then read and saved as a variable called rawdatapath
+
+read rawdatapath
+echo -e "\n"
+
+##### We now want to find all of the desired raw data files!
+##### This finds all of the files ending with fq.gz
+##### These files are then sorted, counted and displayed in a column for the user to see if there is the expected number of raw data files.
+
+find ${rawdatapath} -name '*.fq.gz' | sort | nl | column -t
+echo -e "\n"
+read -p "Are these files the desired raw data files? (y/n)" choice
+if [ "$choice" = "y" ];
+then
+echo -e "\n"
+rawdatafiles=$(find ${rawdatapath} -name '*.fq.gz')
+##### We now want to create a subdirectory for the raw data!, the parent directory of this subdirectory is the outputsubdirectory created earlier.
+##### once the raw data subdirectory is created, we then want to copy all of the raw data files there!
+
+mkdir ${outputsubdirectory}/RAWDATA
+cp -r ${rawdatafiles} ${outputsubdirectory}/RAWDATA
+echo -e "Rawdata files have been copied to: ${outputsubdirectory}/RAWDATA \n"
+#####
+#####
+
+else
+echo -e "\nUnable to locate the provided path, please try again\n"
+Obtainingrawdata;
+fi
+}
+
+
+Obtainingrawdata 
+
+
+##### So now we have created a directory for all of the raw data files and copied these raw data files into that Directory!
+##### How ever we also need to obtain the file which contains all of the sample details!!
+
+
+Obtainingsampledetails () {
+echo -e "\nInput the name of the file in which the sample details are stored, for example: fqfiles"
+##### The user input is read and saved as a variable called "sampledetailfilename"
+read sampledetailfilename
+echo "\n"
+
+##### The script needs to locate the sample details file.
+##### The script then need to print the name of the lifecycles
+##### and then print the names of the forwards and reverse sequence files
+
+ 
+find ${rawdatapath} -type f -name ${sampledetailfilename} | xargs -I {} cat {} | awk '{print $2, $3, $NF;}' | column -t | nl
+echo "\n"
+read -p "Are these your desired sample details? (y/n)" choice2
+if [ "$choice2" = "y" ];
+	then 
+	echo -e "\n"
+##### If the user is happy with the these sample files and selects "y", then the script will go on to find the sample detail file using the rawdatapath which was provided by the user earlier on.
+##### Once the script has found the sample detail files using the rawdatapath, the script will save it as a variable (called samplefile)
+	samplefile=$(find ${rawdatapath} -type f -name ${sampledetailfilename})
+##### Once the sample detail files have been found and saved as a variable, they are the copied to the RAWDATA subdirectory.
+	cp ${samplefile} ${outputsubdirectory}/RAWDATA
+	echo -e "The fqfiles containing the sample details have been copied to: ${outputsubdirectory}/RAWDATA \n"
+	else
+	echo -e"\nThe provided path to the sample detail files has not been recognised, please try again. \n"
+Obtainingsampledetails;
+fi
+}
+
+Obtainingsampledetails
+
+
+
+##### We now have all of the raw data files in their respective directories!
+##### Now a few modifications to the names of these raw data files need to be made
+##### The names of the relavent lifecyle (slender and stumpy) now need to be copied from the sample details files into the names of the raw data files
+
+##### We know the path of the sample detail file because it has been previously copied in the output subdirectory. 
+##### The path of the sample detail file is saved as variable
+
+sampledetailfile=$(find ${outputsubdirectory} -type f -name ${sampledetailfilename})
+
+##### we want to display to the user the alphabetically sorted fq.gz files in the RAWDATA subdirectory in a table
+
+find ${outputsubdirectory}/RAWDATA -name '*.fq.gz' | sort | nl | column -t
+
+##### we want to save the number of fq.gz files as a variable so that we can tell the user how many fq.fz files are present in the output subdirectory/
+
+filecount=$(find ${outputsubdirectory}/RAWDATA -name '*.fq.gz' | grep -c "/*.fq.gz")
+echo -e "\n${filecount} FASTQ sequencing data files are stored in the output subdirectory. \n"
+echo "Raw data files stored in the output subdirectory will now be renamed such that they include sample detail names, this is so that specific raw data files can be identified. \n"
+
+
+unset IFS
+
+##### sample detail files contain columns
+##### these columns are set as variables. For example "lifecycle"
+##### fq.gz files are then renamed using these variables to include the name of the lifecyle at the start of the fq.gz file name
+
+
+while read n1 lifecycle forwardsequence reversesequence;
+do
+initialforwardpath="${outputsubdirectory}/RAWDATA/$forwardsequence"
+initialreversepath="${outputsubdirectory}/RAWDATA/$reversesequence"
+
+finalforwardpath=${outputsubdirectory}/RAWDATA/${lifecycle}"_${forwardsequence}"
+finalreversepath=${outputsubdirectory}/RAWDATA/${lifecycle}"_${reversesequence}"
+
+mv ${initialforwardpath} ${finalforwardpath}
+mv ${initialreversepath} ${finalreversepath}
+
+done < ${sampledetailfile}
+
+
+##### We now want to display to the user the newly renamed fq.gz files so that he/she can identify specific files for analysis.
+ls -l ${outputsubdirectory}/RAWDATA | grep "/*.fq.gz" | awk '{print $NF;}' | nl | column -t
+echo -e "\n"
+echo -e "fq.gz files have now be renamed!!, file names now include sample details. \n"
+
+
+
+######## Now time for some actual fastqc analysis.
+
+##### Firstly, we must create a new subdirectory to store the results of the fastqc analysis.
+
+mkdir ${outputsubdirectory}/fastqc_analysis_results
+
+##### now to actually analyse the samples
+
+echo -e "\nSamples are currently undergoing fastqc analysis, this should not take too long."
+fastqcall=$(find ${outputsubdirectory}/RAWDATA -name '*.fq.gz' | sort)
+
+##### All files within the output subdirectory ending in .fq.gz will undergo fastqc analysis
+##### The script will go on to perform this analysis quietly and then extract each output of the fastqc analysis
+
+fastqc -t 50 --quiet -o ${outputsubdirectory}/fastqc_analysis_results --extract ${fastqcall}
+find ${outputsubdirectory}/fastqc_analysis_results -name '*.zip' | xargs rm
+echo -e"\nThanks for waiting! all samples have now undergone fastqc analysis. \n"
+
+
+
+##### Analysis complete! now we want the user to view the results from the analysis in an easy to read manner
+##### We want to display the results from fastqc analysis in a table, providing info such as the name of the sample, total number of sequence that underwent analysis, sequence length and the number poor quality read!!
+
+##### find all fastqc files ending in fastqc_data.txt within the output subdirectory and setting them as a variable fastqc_analysis_details
+
+fastqc_analysis_details=$(find ${outputsubdirectory} -name '*fastqc_data.txt' | sort)
+
+awk -F"\t" '
+BEGIN { print "..................................................................................................................."
+printf "%-25s %-25s %-25s %-25s %-25s\n","Sample name","Total sequences","Poor quality","Sequence length","GC content"
+print "....................................................................................................................."
+} '
+
+for files in $fastqc_analysis_details
+do 
+awk -F"\t" ' NR == 4 { printf "%-30s", substr($2, 1, length($2)-6)}; NR == 7 { printf "%-25s",$2 }; NR == 8 { printf "%-25s", $2 }; NR == 9 { printf "%-25s", $2 }; NR == 10 { printf "%-25s\n", $2 }' $files
+done
+
+
+
+
+
+
+
+
+
+##### It would be useful for the user of the script to see if there were any modules of samples that had failed to undergo fastqc analysis.
+##### Searching the entire of the output subdirectory for files ending in summary.txt and saving them as a variable.
+
+fastqc_summaries=$(find ${outputsubdirectory} -name '*summary.txt' | sort)
+
+
+echo -e "\n"
+
+awk -F"\t" '
+BEGIN { print "............................................................................................................................."
+printf "%-30s %-20s %-30s %-20s %-30s\n","Sample name","Modules Failed","Name of Failed Modules","Modules Warned","Name of Warned Modules"
+print "....................................................................................................................................."
+} '
+
+
+##### using the fastqc analysis summary data, the script will go on to count the number modules that passed, failed and those that warned
+
+numberofpasses=$(awk -F"\t" '/PASS/ {count++} END {print count}' $fastqc_summaries)
+numberoffails=$(awk -F"\t" '/FAIL/ {count++} END {print count}' $fastqc_summaries)
+numberofwarned=$(awk -F"\t" '/WARN/ {count++} END {print count}' $fastqc_summaries)
+
+##### We now need to search each and every fastqc summary.txt file and set multiple variables using this data
+##### The required variable include the name of the sample, number of failed modules, number of warned modules
+
+for files in $fastqc_summaries
+do
+##### variable for the name of the sample. 
+
+samplename=$(awk -F"\t" '{print substr($3, 1, length($3)-6)}' $files | uniq)
+
+##### variable for the number of failed modules
+
+numberoffails=$(awk -F"\t" '/FAIL/ {count++} END {print count}' $files)
+
+##### variable for the number of warned modules
+
+numberofwarned=$(awk -F"\t" '/WARN/ {count++} END {print count}' $files)
+
+##### variable to allow the script to print the number of failed modules
+
+numberoffailedmodules=$(awk -F"\t" '$1 == "FAIL" {print $2}' $files)
+
+##### variable to allow the script to print the number of warned modules
+
+numberofwarnedmodules=$(awk -F"\t" '$1 == "WARN" {print $2}' $files)
+
+############ Now that we have set out desired variable, we want to print a table of all of these variables for user to view
+
+printf {"%-30s %-20s %-30s %-20s %-30s\n","$samplename","$numberoffails","$numberoffailedmodules","$numberofwarned","$numberofwarnedmodules"}
+
+done
+
+
+
+
+
+
+##### So now we have completed fastqc analysis!! as well as produced two tables for the user to view
+##### as a result of the fastqc analysis, many HTML files are created for each of the samples.
+##### Perhaps the viewer would like to view a particular HTML, or maybe not. Would be nice to have to choice though!.
+
+
+openfastqchtml () {
+echo -e "\n \n"
+read -p "Would the user like to view the report for any particular fastqc sample? (y/n)" choice
+if [ "$choice" == "y" ];
+then
+echo -e "input the name of the sample who's report you would like to view."
+
+##### The script will go on to read the input of the user and this will be saved as a variable
+##### The script will then go on to read the variable and search the outputsubdirectory for files containing this variable *.html
+
+read reportview
+
+##### searching for html files containing the input of the user
+##### if the script finds any files that fit this category, those particular html files will be opened in firefox.
+
+firefoxlinks=$(find ${outputsubdirectory}/fastqc_analysis_results -name "*$reportview*" -a -name "*.html" | awk '{print}' ORS=" ")
+firefox ${firefoxlinks}
+
+
+echo -e "\n"
+
+openfastqchtml
+
+else
+:
+fi
+}
+
+
+openfastqchtml
+
