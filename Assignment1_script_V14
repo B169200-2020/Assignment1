@@ -1,0 +1,301 @@
+#!/bin/bash
+
+
+##### Creating a directory for output data using the input of an existing directory path and a name for the output directory by the user
+
+inputpath () {
+echo -e "Input the path of an already existing directory, followed by the name you would like to give your (output) subdirectory (don't include the / at the end of the path). This subdirectory will be the home of all of your subsequent output data."
+## the user is asked to provide a path to a directory that exists, followed by the name they would like to give their output directory ##
+read outputsubdirectory ## the input of the user is read by the script and saved as a variable ##
+echo -e "\n"
+read -p "Please confirm that "$outputsubdirectory" is the subdirectory that you wish to create (y/n)" choice ## the user is then asked if he/she if happy with the path and the name of the outputsubdirectory that they have provided ##
+if [ "$choice" = "y" ]; ## if yes perform the following function ##
+then 
+
+mkdir "${outputsubdirectory}" ## the script will make a new directory using the path provided by the user for the subsequent storage of output data ##
+echo -e "\nYour output subdirectory has been created, its path has been provided below." ## annnouncement to the user that the making of this new outputsubdirectory was successful ##
+echo -e "${outputsubdirectory}" ## displaying the path of the newly created output subdirectory to the user ##
+
+else ##  if the user does no respond with ("y") the user will be asked to provide a different path and desired name for the output subdirectory ##
+inputpath;
+fi
+}
+
+
+
+inputpath
+
+
+
+##### Obtaining the raw data from a given directory path
+
+Obtainingrawdata () {
+echo -e "\n Input the path of the directory containing all of the raw data (do not include / at the end of the path)" ## the user is asked to input the path to the directory containing the raw data ##
+read rawdatapath ## the path inputted by the user is read by the script and saved as a variable called "rawdatapath" ##
+echo -e "\n"
+find ${rawdatapath} -name '*.fq.gz' | sort | nl | column -t ## the script goes onto to search for all files in the given directory path that end in ".fq.gz", these files are then sorted alphabetically, counted and displayed to the user in a column ##
+echo -e "\n"
+read -p "Are these files the desired raw data files? (y/n)" choice ## user is asked if the displayed files are the expected/desired raw data files ##
+if [ "$choice" = "y" ]; ## if the answer is yes, perform the following: ##
+then
+echo -e "\n"
+rawdatafiles=$(find ${rawdatapath} -name '*.fq.gz') ## all files within the given directory path ending in "fq.gz" are found by the script and saved as a variable called "rawdatafiles" ##
+mkdir ${outputsubdirectory}/RAWDATA ## the script makes a new subdirectory called "RAWDATA" this is where the raw data will be stored ##
+cp -r ${rawdatafiles} ${outputsubdirectory}/RAWDATA ## raw data files are then copied from the given directory to the newly created "RAWDATA subdirectory ##
+echo -e "Rawdata files have been copied to: ${outputsubdirectory}/RAWDATA \n" ## announcement to the user that the copying of raw data files to the RAWDATA subdirectory was successful ##
+
+else
+echo -e "\nUnable to locate the provided path, please try again\n" ## if the path inputted by the user does not exist, the script will ask the user to try again ##
+Obtainingrawdata;
+fi
+}
+
+
+Obtainingrawdata 
+
+
+##### Obtaining sample detail files from a given directory path
+
+Obtainingsampledetails () {
+echo -e "\nInput the name of the file in which the sample details are stored, for example: fqfiles" ## script asks user to input the name of the sample details file present within the directory containing the raw data ##
+read sampledetailfilename ## name of sample detail file is read and saved as a variable ##
+echo "\n"
+
+find ${rawdatapath} -type f -name ${sampledetailfilename} | xargs -I {} cat {} | awk '{print $2, $3, $NF;}' | column -t | nl ## script searches for the inputted sample detail file name in the directory whos path was provided earlier to obtain the raw data ##
+## if the sample detail file is found, it is selected and concatenated. the script then goes onto print the lifecycle name as well as the names of the files containing the forwards and reverse sequences and displays then to the user ##
+echo "\n"
+read -p "Are these your desired sample details? (y/n)" choice2 ## asking the user if the displayed files are the ones he/she is looking for ##
+if [ "$choice2" = "y" ]; ## if the answer is yes, then pefrom the following function ##
+	then 
+	echo -e "\n"
+	samplefile=$(find ${rawdatapath} -type f -name ${sampledetailfilename}) ## the script will search the rawdatapath and seach for files that match the earlier input of the user for the name of the sample detail file and save it as a variable called "samplefile" ##
+	cp ${samplefile} ${outputsubdirectory}/RAWDATA ## the sample detail file is then copied to the raw data subdirectory ##
+	echo -e "The fqfiles containing the sample details have been copied to: ${outputsubdirectory}/RAWDATA \n" ## announcement to the user that the copying of the sample detail file to the raw data subdirectory was successful ##
+	else ## if the file name inputted by the user does no match any of the files in the rawdata pat, perform the following: ##
+	echo -e"\nThe provided path to the sample detail files has not been recognised, please try again. \n" ## asks the user to attempt to input the name of the existing sample detail file ##
+Obtainingsampledetails;
+fi
+}
+
+Obtainingsampledetails
+
+
+
+##### Renaming of raw data such that the files include the relavent lifecycle names (Slender/Stumpy)
+
+sampledetailfile=$(find ${outputsubdirectory} -type f -name ${sampledetailfilename}) ## script searches the output subdirectory for files with the same name as the fqfiles containing the sample details ##
+find ${outputsubdirectory}/RAWDATA -name '*.fq.gz' | sort | nl | column -t ## the script seaches the rawdata subdirectory for all files ending in ".fq.gz", sorts then alphabetically, numbers them and displays them to view in a column ##
+filecount=$(find ${outputsubdirectory}/RAWDATA -name '*.fq.gz' | grep -c "/*.fq.gz") ## script creates a variable which searches the rawdata subdirectory for files ending in "fq.gz and counts them" ##
+echo -e "\n${filecount} FASTQ sequencing data files are stored in the output subdirectory. \n" ## announcing to the user the number of fastqc data files are stored in the output subdirectory ##
+echo "Raw data files stored in the output subdirectory will now be renamed such that they include sample detail names, this is so that specific raw data files can be identified. \n"
+## announcement to the user that files within the raw data subdirectory will be renamed to include the relavent lifecycle names ##
+
+unset IFS
+
+##### sample detail files contain columns
+##### these columns are set as variables. For example "lifecycle"
+##### fq.gz files are then renamed using these variables to include the name of the lifecyle at the start of the fq.gz file name
+
+
+while read n1 lifecycle forwardsequence reversesequence; ## the scripts sets variable for each of the columnn of the sample details file ##
+do
+initialforwardpath="${outputsubdirectory}/RAWDATA/$forwardsequence"
+initialreversepath="${outputsubdirectory}/RAWDATA/$reversesequence"
+finalforwardpath=${outputsubdirectory}/RAWDATA/${lifecycle}"_${forwardsequence}"
+finalreversepath=${outputsubdirectory}/RAWDATA/${lifecycle}"_${reversesequence}"
+mv ${initialforwardpath} ${finalforwardpath}
+mv ${initialreversepath} ${finalreversepath}
+done < ${sampledetailfile}
+## the script will then go on and use these variable to rename all raw data files such that they include the name of the relavent lifecycles ##
+ls -l ${outputsubdirectory}/RAWDATA | grep "/*.fq.gz" | awk '{print $NF;}' | nl | column -t ## newly renamed rawdata files are displayed to the user, this will be useful for the user to identify specific files for further analysis ##
+echo -e "\n"
+echo -e "fq.gz files have now be renamed!!, file names now include sample details. \n"
+
+
+
+##### Fastqc anlaysis of raw data
+
+mkdir ${outputsubdirectory}/fastqc_analysis_results ## making a new subdirectory called "fastqc_analysis_results" for the storage of fastqc analysis output data ##
+echo -e "\nSamples are currently undergoing fastqc analysis, this should not take too long." ## announcement to the user that the raw data samples are undergoing fastqc analysis ##
+fastqcall=$(find ${outputsubdirectory}/RAWDATA -name '*.fq.gz' | sort) ## script searches for all files ending in ".fq.gz" in the raw data subdirectory and saves them as a variable ##
+fastqc -t 50 --quiet -o ${outputsubdirectory}/fastqc_analysis_results --extract ${fastqcall} ## script will go on to perform fastqc analysis of the raw data, -t 50 will allow all sample data to be analyzed at the same time ##
+## fastqc analysis is also perform quietly (--quiet), so that the viewer does not see what is going on and only sees the results ##
+## --extract flag means that each and every piece of sample data does not have to be unzipped, results of the analysis are send to the "fastqc_analysis_results" subdirectory ##
+find ${outputsubdirectory}/fastqc_analysis_results -name '*.zip' | xargs rm ## script will then go on to search the fastqc_analysis_results subdirectory and remove all files ending in ".zip" ##
+echo -e"\nThanks for waiting! all samples have now undergone fastqc analysis. \n" ## announcement to the user that fastqc analysis of raw data was completed successfully ##
+
+
+
+
+##### Creating a table of results for fastqc analysis
+
+fastqc_analysis_details=$(find ${outputsubdirectory} -name '*fastqc_data.txt' | sort) ## searching the output subdirectory for files ending in "fastqc_data.txt" and saving them as a variable ##
+awk -F"\t" '
+BEGIN { print "..................................................................................................................."
+printf "%-25s %-25s %-25s %-25s %-25s\n","Sample name","Total sequences","Poor quality","Sequence length","GC content"
+print "....................................................................................................................."
+} ' ## print the structure of the table of results ##
+
+for files in $fastqc_analysis_details ## for all files fitting the above category, perform the following function ##
+do 
+awk -F"\t" ' NR == 4 { printf "%-30s", substr($2, 1, length($2)-6)}; NR == 7 { printf "%-25s",$2 }; NR == 8 { printf "%-25s", $2 }; NR == 9 { printf "%-25s", $2 }; NR == 10 { printf "%-25s\n", $2 }' $files
+done
+
+
+fastqc_summaries=$(find ${outputsubdirectory} -name '*summary.txt' | sort) ## searching the entirety of the output subdirectory for files ending in "summary.txt" and saving them as a variable ##
+echo -e "\n"
+awk -F"\t" '
+BEGIN { print "............................................................................................................................."
+printf "%-30s %-20s %-30s %-20s %-30s\n","Sample name","Modules Failed","Name of Failed Modules","Modules Warned","Name of Warned Modules"
+print "....................................................................................................................................."
+} '
+
+
+# using the fastqc analysis summary data, the script will go on to count the number modules that passed, failed and those that warned
+
+numberofpasses=$(awk -F"\t" '/PASS/ {count++} END {print count}' $fastqc_summaries)
+numberoffails=$(awk -F"\t" '/FAIL/ {count++} END {print count}' $fastqc_summaries)
+numberofwarned=$(awk -F"\t" '/WARN/ {count++} END {print count}' $fastqc_summaries)
+
+# We now need to search each and every fastqc summary.txt file and set multiple variables using this data
+# The required variable include the name of the sample, number of failed modules, number of warned modules
+
+for files in $fastqc_summaries ## for files that fit the category of the fastqc_summaries variable, perform the following ##
+do
+
+samplename=$(awk -F"\t" '{print substr($3, 1, length($3)-6)}' $files | uniq) ## creating a variable which searches all summary.txt files and removes "fq.gz", returning only the sample name  ##
+
+numberoffails=$(awk -F"\t" '/FAIL/ {count++} END {print count}' $files) ## variable is created so that the script can count the number of failed modules, getting rid of duplicates if applicable ##
+
+numberofwarned=$(awk -F"\t" '/WARN/ {count++} END {print count}' $files) ## variable is created so the script can count the number of warned modules, getting rid of duplicates where applicable ##
+
+numberoffailedmodules=$(awk -F"\t" '$1 == "FAIL" {print $2}' $files) ## variable is created to allow the script to print the number of failed modules into the table ##
+
+numberofwarnedmodules=$(awk -F"\t" '$1 == "WARN" {print $2}' $files) ## variable is created to allow the script to print the number of warned modules into the table ##
+
+printf {"%-30s %-20s %-30s %-20s %-30s\n","$samplename","$numberoffails","$numberoffailedmodules","$numberofwarned","$numberofwarnedmodules"} ## print the above values in the table for viewing of the user ##
+
+done
+
+
+
+##### Viewing of HTML files produced from fastqc analysis
+
+openfastqchtml () {
+echo -e "\n \n"
+read -p "Would the user like to view the report for any particular fastqc sample? (y/n)" choice ## asking the user if he/she would like to view the reports of a particular sample file ##
+if [ "$choice" == "y" ]; ## if the user said yes ("y") the perform the following ##
+then
+echo -e "input the name of the sample who's report you would like to view." ## asking the user for the name of the particular sample of samples who's report they would like to view ##
+read reportview ## the nput of the user is read and saved as a variable ##
+firefoxlinks=$(find ${outputsubdirectory}/fastqc_analysis_results -name "*$reportview*" -a -name "*.html" | awk '{print}' ORS=" ") ## the script will go on to search files within the fastqc analysis subdirectory containging "reportview" anywhere in the file name, as well as ending in ".html" ##
+firefox ${firefoxlinks} ## open the particular files that fit the category of the in firefoz ##
+echo -e "\n"
+
+openfastqchtml
+
+else ## if the user does not say yes, the nothing will happen and the script will move on to its next task ££
+:
+fi ## end of if statement ##
+}
+
+
+openfastqchtml
+
+
+
+##### Creating a new subdirectory and obtaining the genome sequence for future alignment
+
+mkdir ${outputsubdirectory}/alignment ## making a new subdirectory for the storage of future alignment output data ¢¢
+echo -e "\nInput the path of the directory containing the desired Genome sequence (Do not include the / at the end of the directory path)" ## asking user for the path to the directory containing the genome sequence ##
+read genomesequencepath ## path to the directory containing the genome sequence is read by the script and saved as a variable ##
+echo -"\n"
+find ${genomesequencepath} -type f -name "*fasta.gz" | xargs -I {} cp {} $outputsubdirectory/alignment ## search the given directory path for files ending in "fasta.gz", these files are then selected and copied to the newly created alignment subdirectory ##
+find ${outputsubdirectory}/alignment -type f -name "*fasta.gz" | xargs -I {} gunzip {} ## seach the alignment subdirectory for files ending in "fasta.gz", select it and unzip that file ##
+echo -e "\nThe genome sequence from the provided genome sequence path has been unzipped and copied to: ${outputsubdirectory}/alignment" ## announcement to the user that the genome sequence has been successfully unzipped and stored in the newly created subdirectory ##
+
+
+
+##### Creation of bowtie2 index
+
+cd ${outputsubdirectory}/alignment ## the script will change directory to the alignment subdirectory ##
+echo -e "Please input the name you would like to give your bowtie2 index, try and make it something easy to remember and relevant!" ## Script asks the user the title he/she would lie to give their bowtie2 index ##
+read bowtie2indexname ## input from the user is read by the script and saved as a variable ##
+echo -e "\nthe script is currently building your bowtie2index, please wait" ## announement to the user that their bowtie2 index is being built ##
+find ${outputsubdirectory}/alignment -type f -name "*.fasta" | xargs -I {} bowtie2-build --quiet --threads 50 {} $bowtie2indexname ## script searches the alignment subdirectory for files ending in ".fasta", script will the build the bowtie to index quietly (user does not see whats going on), and gives it the name that was provided by the user ##
+
+echo -e "\nThank you for your patience! your bowtie2index has been successfully built" ## announcement to the user that the bowtie2 index has been successfully created ##
+
+
+
+##### Alignment of read pairs to the genome sequence
+
+readpairfiles=$(find ${outputsubdirectory}/RAWDATA -type f -name "*.fq.gz" | sort | rev | cut -c 9- | rev | uniq) ## A variable for raw data files is saved, cut -c 9- removes either _1 or _2, leaving you with just the lifecycle name and file number ##
+## files are sorted and any duplicates are removed using uniq ##
+
+for file in ${readpairfiles};  ## for every read pair file, perform the following function ##
+do
+alignedbamname=$(echo "$file" | awk -F"/" '{print $NF}')
+echo -e "\n${file} is currently undergoing alignment, this should not take too long" ## announcement to the user that a particular read pair file is undergoing alignment ##
+
+bowtie2 -x $bowtie2indexname -1 ${file}_1.fq.gz -2 ${file}_2.fq.gz --no-mixed --no-unal -p 50 | samtools view -bS - > ${outputsubdirectory}/alignment/${alignedbamname}.bam
+## creation of the bowtie2 index is shown above, no mixed due to assumptions of no introns, no unal so that any unaligned readings are not present in the output ##
+## samtools then converts the output of the alignment into bam format using the -bS flag ##
+echo -e "\nRead pair files have been successfully aligned with the desired genome sequence!, alignments are saved in BAM format and stored in the alignment subdirectory" ## announcing to the user that alignment was successful and outputs are saved in the alignment subdirectory ##
+done
+
+
+
+
+
+##### Copying bedfile from the given directory path 
+
+echo -e "\n"
+
+echo -e	"Input the path	to the directory containing the	desired	bedfile	(do not	include	/ after inputting the path)" ##Script asks the user for the path to the desired bedfile##
+read bedfilepath ## Script reads path inputted by the user ##
+echo -e "\n"
+bedfiles=$(find ${bedfilepath} -name '*.bed') ## bedfiles within the given directory path are saved as a variable ##
+echo -e "\n"
+cp ${bedfiles} ${outputsubdirectory}/alignment ## bedfiles withing the given directory path are copied to the alignment subdirectory within the parent outputsubdirectory ##
+copiedbedfiles=$(find ${outputsubdirectory}/alignment -name '*.bed') ## newly copied bedfiles are saved as a variable so to annouce to the user that copying of these bedfiles was successful"
+echo -e "bedfiles from the given directory path have been copied to: ${outputdirectory}/alignment \n" ## anouncement to the user 
+
+
+
+##### Creating BAM index
+
+bamfiles=$(find ${outputsubdirectory}/alignment -name '*.bam' | sort) ## BAM files created from the alignment are saved as a variable so that they can be sorted ##
+for files in $bamfiles ## for every file that fits the above category ##
+
+do
+bamfilename=${files%%.*} ## sets a new variable consists of the BAM files, but with the numbers and .bam removed, leaving you with simply the file name ##
+echo -e "Currently sorting the bam file of ${bamfilename}" ## announcement to the user that their BAM files are undergoing sorting ##
+samtools sort -@ 50 $files -o ${bamfilename}.sorted.bam ## samtools sorting of the BAM file names, @ -50 speeds up the process, .sorted.bam are added the ends of these variables ##
+echo -e "Bam file of ${bamfilename} has been succesfully sorted\n" ## announcement to the user that BAM files have successfully undergone sorting with samtools ##
+done
+
+sortedbamfiles=$(find ${outputsubdirectory}/alignment -name '*.sorted.bam' | sort) ## newly sorted BAM files are then saved as a variable, required for the creation of BAM index ##
+for files in ${sortedbamfiles} ## for every file within the alignment subdirectory ending in '.sorted.bam', perfrom the following function ##
+do
+samtools index -@ 50 $files ## creating of the BAM index using samtools, again -@ 50 helps to speed up the process ##
+echo -e "Currently creating the index for $files" ## announcement to the user that the script is creating a BAM index ##
+echo -e "Index succesfully created for $files \n" ## announcement to the user for the successful creation of the BAM index ##
+done
+
+
+##### Running bedtools
+
+cd ${outputsubdirectory} ## change directory to the parent output subdirectory ##
+mkdir ${outputsubdirectory}/counts_data ## create a new subdirectory called "counts_data" ##
+thebedfile=$(find ${outputsubdirectory}/alignment -name *.bed) ## create a variable consisting of the bedfile within the alignment subdirectory ##
+
+awk '{print $2}' ${samplefile} | sort | uniq | while read -r lifecyclename ## Prints the contents of the column within the sample details file, sorts them and gets rid of any duplicates, this then reads the names of the different lifecycles ##
+do
+lifecyclebamfiles=$(find ${outputsubdirectory}/alignment -name "*.sorted.bam" -a -name "${lifecyclename}*" | sort) ## once lifecycle names have been read, the script will search for files which begin with the name of the lifecycle and end in ".sorted.bam" ##
+echo -e "Now performing gene counts of all ${lifecyclename} samples" ## announcement to the user that the script will undergo gene counting ##
+bedtools multicov -bams ${lifecyclebamfiles} -bed ${thebedfile} > ${outputsubdirectory}/counts_data/${lifecyclename}.counts.txt ## script will then run bedtools multicov (Counting more than one BAM file) on the lifecycle specific BAM files and the provided bedfile ##
+## once the script has finished running bedtools, counts data is stored in the counts_data subdirectory, whereby data for different lifecycles are separated. ##
+lifecyclecounts=$(find ${outputsubdirectory}/counts_data -name "*${lifecyclename}.counts.txt") ## New varirable for the lifecycle counts is created so that the script can announce the completion of gene counting ## 
+echo -e "Gene counts on ${lifecyclename} samples were succesful and have been outputted to ${lifecyclecounts}" ## announcement to the user to say that gene counting is complete ##
+done
