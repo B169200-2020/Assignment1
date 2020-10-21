@@ -299,3 +299,8 @@ bedtools multicov -bams ${lifecyclebamfiles} -bed ${thebedfile} > ${outputsubdir
 lifecyclecounts=$(find ${outputsubdirectory}/counts_data -name "*${lifecyclename}.counts.txt") ## New varirable for the lifecycle counts is created so that the script can announce the completion of gene counting ## 
 echo -e "Gene counts on ${lifecyclename} samples were succesful and have been outputted to ${lifecyclecounts}" ## announcement to the user to say that gene counting is complete ##
 done
+
+
+
+##### 
+
